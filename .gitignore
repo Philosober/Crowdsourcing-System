@@ -1,0 +1,16 @@
+# ignore original dataset
+test/
+train/
+
+# ignore "."
+.DS_Store
+.idea
+.ipynb_checkpoints
+
+# ignore some file
+__pycache__
+
+# ignore generate file
+
+# ignore pyc
+*.pyc
