@@ -23,7 +23,7 @@ TASK_FEATURE = 76
 EPSILON = 0.9
 GAMMA = 0.9
 LR = 0.001
-EPOCH = 20
+EPOCH = 5
 Q_NETWORK_ITERATION = 100
 BATCH_SIZE = 64
 
@@ -51,6 +51,11 @@ class Sample_Data(Dataset):
 class DQN():
     def __init__(self, file_path):
         self.eval_net, self.target_net = Net(TASK_FEATURE * 2), Net(TASK_FEATURE * 2)
+
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.eval_net.to(device=self.device)
+        self.target_net.to(device=self.device)
+
         self.optimizer = optim.Adam(self.eval_net.parameters(), LR)
         self.scheduler = StepLR(self.optimizer, step_size=10, gamma=0.5)
         self.loss = nn.MSELoss()
@@ -79,12 +84,12 @@ class DQN():
                                         index_col='project_id')
 
     def get_batch(self, state, action, reward, next_state):
-        batch_state = []
+        batch_state = []   # B x T x D
         batch_state_Seq = []  # list
         batch_action = []  # B x 1
-        batch_next_state = []
+        batch_next_state = []   # B x T x D
         batch_next_state_Seq = []  # list
-        batch_reward = torch.unsqueeze(reward, dim=1)
+        batch_reward = torch.unsqueeze(reward, dim=1)   # B x 1
 
         # state变成fs且可以batch
         # action对应到序列中第几个vector
@@ -102,6 +107,12 @@ class DQN():
             batch_next_state_Seq.append(T)  # 记录每个state的序列长度，方便后面取argmaxQ(s, a)    相当于T x 1取前t个值中的最大值
             batch_next_state.append(fs)
         batch_next_state = pad_sequence(batch_next_state, batch_first=True)  # B x T x D
+        batch_action = torch.tensor(batch_action).unsqueeze(dim=1)  # B x 1
+
+        batch_state = batch_state.to(self.device)
+        batch_reward = batch_reward.to(self.device)
+        batch_next_state = batch_next_state.to(self.device)
+        batch_action = batch_action.to(self.device)
 
         return batch_state, batch_state_Seq, batch_action, batch_reward, batch_next_state, batch_next_state_Seq
 
@@ -114,7 +125,7 @@ class DQN():
         action = torch.zeros((len(state_Seq), k))
         for i, T in enumerate(state_Seq):
             action[i] = torch.randint(low=0, high=T, size=(k,))
-        return action
+        return action.to(self.device)
 
     def choose_action(self, qsa_eval, state_Seq, k=1):
         """
@@ -127,7 +138,7 @@ class DQN():
         for i, T in enumerate(state_Seq):
             res = qsa_eval[i, : T].topk(k, dim=0)[1]  # k
             action[i] = res
-        return action
+        return action.to(self.device)
 
     @torch.no_grad()
     def eval(self, state, action, reward, next_state):
@@ -139,7 +150,6 @@ class DQN():
             = self.get_batch(state, action, reward, next_state)
 
         qsa_eval = self.eval_net(batch_state).squeeze(dim=2)  # B x T
-        batch_action = torch.tensor(batch_action).unsqueeze(dim=1)
         q_eval = qsa_eval.gather(1, batch_action)  # B x 1
 
         q_next = self.target_net(batch_next_state).detach()  # B x T x 1
@@ -148,6 +158,7 @@ class DQN():
         for i, q in enumerate(q_next):
             q_next_max[i] = max(q_next[i, : batch_next_state_Seq[i]])
         q_next_max = torch.unsqueeze(q_next_max, 1)  # B x 1
+        q_next_max = q_next_max.to(self.device)
         q_target = batch_reward + GAMMA * q_next_max
 
         loss = self.loss(q_eval, q_target)  # Q-learning的objective function
@@ -165,19 +176,21 @@ class DQN():
 
         return random_reward, DQN_reward, loss
 
-
-
     def learn(self, bar):
-        for i, batch_data in enumerate(bar):
+        for iteration, batch_data in enumerate(bar):
             self.target_net.load_state_dict(self.eval_net.state_dict())  # target_net参数更新
             state, action, reward, next_state = batch_data
+            if iteration % 100 == 0:
+                random_reward_eval, DQN_reward_eval, loss_eval = self.eval(state, action, reward, next_state)
+            else:
+                bar.set_postfix(loss_eval=loss_eval.item(), random_reward=random_reward_eval, DQN_reward=DQN_reward_eval)
+
 
             batch_state, _, batch_action, \
             batch_reward, batch_next_state, batch_next_state_Seq \
                 = self.get_batch(state, action, reward, next_state)
 
             q_eval = self.eval_net(batch_state).squeeze(dim=2)  # B x T
-            batch_action = torch.tensor(batch_action).unsqueeze(dim=1)  # B x 1
             q_eval = q_eval.gather(1, batch_action)  # B x 1
 
             q_next = self.target_net(batch_next_state).detach()  # B x T x 1
@@ -186,6 +199,7 @@ class DQN():
             for i, q in enumerate(q_next):
                 q_next_max[i] = max(q_next[i, : batch_next_state_Seq[i]])
             q_next_max = torch.unsqueeze(q_next_max, 1)  # B x 1
+            q_next_max = q_next_max.to(self.device)
             q_target = batch_reward + GAMMA * q_next_max
 
             loss = self.loss(q_eval, q_target)  # Q-learning的objective function
@@ -302,6 +316,8 @@ def main():
             total_loss += loss
 
             test_bar.set_postfix(loss=loss.item(), total_random_reward=total_random_reward, total_DQN_reward=total_DQN_reward)
+
+        torch.save(model.eval_net.state_dict(), "./checkpoint/DQN_%d.pkl"%e)
         # print("random: {}, QDN: {}, loss: {}".format(total_random_reward, total_DQN_reward, total_loss))
 
 
