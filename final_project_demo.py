@@ -17,6 +17,7 @@ from Network import Net
 import os
 from torch.optim.lr_scheduler import StepLR
 from tqdm import tqdm
+from torch.utils.data import random_split
 
 # hyper parameters
 TASK_FEATURE = 76
@@ -57,14 +58,22 @@ class DQN():
         self.target_net.to(device=self.device)
 
         self.optimizer = optim.Adam(self.eval_net.parameters(), LR)
-        self.scheduler = StepLR(self.optimizer, step_size=10, gamma=0.5)
+        self.scheduler = StepLR(self.optimizer, step_size=400, gamma=0.5)
         self.loss = nn.MSELoss()
 
         self.load_data(file_path)
 
-    def load_data(self, file_path):
+    def load_data(self, file_path, train_ratio=0.8):
         dataset = Sample_Data(file_path)
-        self.dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
+        train_size = int(train_ratio * len(dataset))
+        test_size = len(dataset) - train_size
+        train_dataset, val_dataset = random_split(
+            dataset=dataset,
+            lengths=[train_size, test_size],
+            generator=torch.Generator().manual_seed(0)
+        )
+        self.train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+        self.val_dataloader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=True)
         self.project_info = pd.read_csv("project_info.csv",
                                         usecols=['project_id', 'project_feature'],
                                         index_col='project_id')
@@ -206,6 +215,7 @@ class DQN():
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
+            self.scheduler.step()
 
             bar.set_postfix(loss=loss.item())
 
@@ -290,23 +300,21 @@ class DQN():
 
 def main():
     model = DQN('./train')
-    TEST_BATCH = 100
     # q_eval = torch.randn((10, 10, 1))
     # state_Seq = [4, 5, 8, 9, 3, 5, 5, 5, 6, 8]
     # print(model.choose_action(q_eval, state_Seq, 3).shape)
     # print(model.random_action(state_Seq, 3).shape)
 
     for e in range(EPOCH):
-        train_bar = tqdm(model.dataloader, desc="Training", total=len(model.dataloader))
+        train_bar = tqdm(model.train_dataloader, desc="Training", total=len(model.train_dataloader))
         train_bar.set_description(f'Training Epoch [{e}/{EPOCH}]')
         model.learn(train_bar)
-        # model.scheduler.step()
         # state, action, reward, next_state = next(iter(model.dataloader))
         # random_reward, DQN_reward, loss = model.eval(state, action, reward, next_state)
         # print("random: {}, QDN: {}, loss: {}".format(random_reward, DQN_reward, loss))
 
         total_random_reward, total_DQN_reward, total_loss = 0, 0, 0
-        test_bar = tqdm(model.dataloader, desc="Testing", total=TEST_BATCH)
+        test_bar = tqdm(model.val_dataloader, desc="Testing", total=len(model.val_dataloader))
         test_bar.set_description(f'Testing Epoch [{e}/{EPOCH}]')
         for batch_data in test_bar:
             state, action, reward, next_state = batch_data
