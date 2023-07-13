@@ -1,7 +1,6 @@
 # ignore original dataset
 test/
 train/
-checkpoint/
 
 # ignore "."
 .DS_Store

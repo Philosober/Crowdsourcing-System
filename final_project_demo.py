@@ -24,9 +24,11 @@ TASK_FEATURE = 76
 EPSILON = 0.9
 GAMMA = 0.9
 LR = 0.001
-EPOCH = 5
+EPOCH = 20
+TEST_ITERATION = 10
 Q_NETWORK_ITERATION = 100
-BATCH_SIZE = 64
+BATCH_SIZE = 32
+SAVE_ITERATION = 5
 
 
 class Sample_Data(Dataset):
@@ -50,7 +52,7 @@ class Sample_Data(Dataset):
 
 
 class DQN():
-    def __init__(self, file_path):
+    def __init__(self, train_mode=True, file_path='./train/worker_7945.csv'):
         self.eval_net, self.target_net = Net(TASK_FEATURE * 2), Net(TASK_FEATURE * 2)
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -58,10 +60,11 @@ class DQN():
         self.target_net.to(device=self.device)
 
         self.optimizer = optim.Adam(self.eval_net.parameters(), LR)
-        self.scheduler = StepLR(self.optimizer, step_size=400, gamma=0.5)
+        self.scheduler = StepLR(self.optimizer, step_size=15, gamma=0.1)
         self.loss = nn.MSELoss()
 
-        self.load_data(file_path)
+        if train_mode:
+            self.load_data(file_path)
 
     def load_data(self, file_path, train_ratio=0.8):
         dataset = Sample_Data(file_path)
@@ -93,12 +96,12 @@ class DQN():
                                         index_col='project_id')
 
     def get_batch(self, state, action, reward, next_state):
-        batch_state = []   # B x T x D
+        batch_state = []  # B x T x D
         batch_state_Seq = []  # list
         batch_action = []  # B x 1
-        batch_next_state = []   # B x T x D
+        batch_next_state = []  # B x T x D
         batch_next_state_Seq = []  # list
-        batch_reward = torch.unsqueeze(reward, dim=1)   # B x 1
+        batch_reward = torch.unsqueeze(reward, dim=1)  # B x 1
 
         # state变成fs且可以batch
         # action对应到序列中第几个vector
@@ -189,11 +192,11 @@ class DQN():
         for iteration, batch_data in enumerate(bar):
             self.target_net.load_state_dict(self.eval_net.state_dict())  # target_net参数更新
             state, action, reward, next_state = batch_data
-            if iteration % 100 == 0:
+            if iteration % TEST_ITERATION == 0:
                 random_reward_eval, DQN_reward_eval, loss_eval = self.eval(state, action, reward, next_state)
             else:
-                bar.set_postfix(loss_eval=loss_eval.item(), random_reward=random_reward_eval, DQN_reward=DQN_reward_eval)
-
+                bar.set_postfix(loss_eval=loss_eval.item(), random_reward=random_reward_eval,
+                                DQN_reward=DQN_reward_eval)
 
             batch_state, _, batch_action, \
             batch_reward, batch_next_state, batch_next_state_Seq \
@@ -215,7 +218,7 @@ class DQN():
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
-            self.scheduler.step()
+            # self.scheduler.step()
 
             bar.set_postfix(loss=loss.item())
 
@@ -267,10 +270,11 @@ class DQN():
     def state_feature(self, state):
         """
 
-        :param state: [[100, 101], [102, 103, 105]]
+        :param state: "[[100, 101], [102, 103, 105]]"
         :return:state_feature
         """
-        state = list(eval(state))
+        if type(state) is not list:
+            state = list(eval(state))
         task_pool = state[1]
         completed_task = state[0]
         T = len(state[1])  # 任务池中任务的个数
@@ -297,25 +301,24 @@ class DQN():
         task_pool = state[1]
         return task_pool.index(action)
 
+    def load_DQN(self, load_path):
+        state_dict = torch.load(load_path)
+        self.eval_net.load_state_dict(state_dict)
+        self.target_net.load_state_dict(state_dict)
 
-def main():
-    model = DQN('./train')
-    # q_eval = torch.randn((10, 10, 1))
-    # state_Seq = [4, 5, 8, 9, 3, 5, 5, 5, 6, 8]
-    # print(model.choose_action(q_eval, state_Seq, 3).shape)
-    # print(model.random_action(state_Seq, 3).shape)
 
-    for e in range(EPOCH):
+def train(model, epoch=EPOCH, every_save=SAVE_ITERATION, save_model_path="./checkpoint"):
+    for e in range(epoch):
+        model.eval_net.train()
         train_bar = tqdm(model.train_dataloader, desc="Training", total=len(model.train_dataloader))
-        train_bar.set_description(f'Training Epoch [{e}/{EPOCH}]')
+        train_bar.set_description(f'Training Epoch [{e}/{epoch}]')
         model.learn(train_bar)
-        # state, action, reward, next_state = next(iter(model.dataloader))
-        # random_reward, DQN_reward, loss = model.eval(state, action, reward, next_state)
-        # print("random: {}, QDN: {}, loss: {}".format(random_reward, DQN_reward, loss))
+        model.scheduler.step()  # learning rate scheduler
 
+        model.eval_net.eval()
         total_random_reward, total_DQN_reward, total_loss = 0, 0, 0
         test_bar = tqdm(model.val_dataloader, desc="Testing", total=len(model.val_dataloader))
-        test_bar.set_description(f'Testing Epoch [{e}/{EPOCH}]')
+        test_bar.set_description(f'Testing Epoch [{e}/{epoch}]')
         for batch_data in test_bar:
             state, action, reward, next_state = batch_data
             random_reward, DQN_reward, loss = model.eval(state, action, reward, next_state)
@@ -323,10 +326,54 @@ def main():
             total_DQN_reward += DQN_reward
             total_loss += loss
 
-            test_bar.set_postfix(loss=loss.item(), total_random_reward=total_random_reward, total_DQN_reward=total_DQN_reward)
+            test_bar.set_postfix(loss=loss.item(), total_random_reward=total_random_reward,
+                                 total_DQN_reward=total_DQN_reward)
 
-        torch.save(model.eval_net.state_dict(), "./checkpoint/DQN_%d.pkl"%e)
-        # print("random: {}, QDN: {}, loss: {}".format(total_random_reward, total_DQN_reward, total_loss))
+        if e % every_save == 0:
+            torch.save(model.eval_net.state_dict(), save_model_path + "/DQN_%d.pkl" % e)
+
+
+def main():
+    # train
+    # model = DQN(train_mode=True, file_path='./train/worker_7945.csv')
+    # train(model)
+    # test
+    model = DQN(train_mode=False)
+    model.load_DQN("./checkpoint/DQN_5.pkl")
+
+
+# def main():
+#     model = DQN('./train/worker_7945.csv')
+#     # q_eval = torch.randn((10, 10, 1))
+#     # state_Seq = [4, 5, 8, 9, 3, 5, 5, 5, 6, 8]
+#     # print(model.choose_action(q_eval, state_Seq, 3).shape)
+#     # print(model.random_action(state_Seq, 3).shape)
+#
+#     for e in range(EPOCH):
+#         train_bar = tqdm(model.train_dataloader, desc="Training", total=len(model.train_dataloader))
+#         train_bar.set_description(f'Training Epoch [{e}/{EPOCH}]')
+#         model.learn(train_bar)
+#         model.scheduler.step()
+#         # state, action, reward, next_state = next(iter(model.dataloader))
+#         # random_reward, DQN_reward, loss = model.eval(state, action, reward, next_state)
+#         # print("random: {}, QDN: {}, loss: {}".format(random_reward, DQN_reward, loss))
+#
+#         total_random_reward, total_DQN_reward, total_loss = 0, 0, 0
+#         test_bar = tqdm(model.val_dataloader, desc="Testing", total=len(model.val_dataloader))
+#         test_bar.set_description(f'Testing Epoch [{e}/{EPOCH}]')
+#         for batch_data in test_bar:
+#             state, action, reward, next_state = batch_data
+#             random_reward, DQN_reward, loss = model.eval(state, action, reward, next_state)
+#             total_random_reward += random_reward
+#             total_DQN_reward += DQN_reward
+#             total_loss += loss
+#
+#             test_bar.set_postfix(loss=loss.item(), total_random_reward=total_random_reward,
+#                                  total_DQN_reward=total_DQN_reward)
+#
+#         if e % SAVE_ITERATION == 0:
+#             torch.save(model.eval_net.state_dict(), "./checkpoint/DQN_%d.pkl" % e)
+#         # print("random: {}, QDN: {}, loss: {}".format(total_random_reward, total_DQN_reward, total_loss))
 
 
 if __name__ == '__main__':
