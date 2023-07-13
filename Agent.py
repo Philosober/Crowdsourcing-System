@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 from ast import literal_eval
-from final_project_demo import DQN
 import torch
 
 
@@ -104,28 +103,35 @@ class Worker_Agent:
             self.sample_step(action)
         print(self.G)
 
-    def dqn_sample(self, dqn_model):
+    def dqn_sample(self, value_model):
         """
 
-        :param dqn_model: instance of DQN class
+        :param model: instance of DQN class
         :return:
         """
         while self.cur_step <= self.max_step:
             # 通过DQN获取action
             task_pool = self.state[1]
-            state = dqn_model.state_feature(self.state)  # T x D
+            state = value_model.state_feature(self.state)  # T x D
             state = torch.unsqueeze(state, dim=0)
-            qsa = dqn_model.eval_net(state)
+            qsa = value_model.eval_net(state)
             qsa = torch.squeeze(qsa)
             action = task_pool[torch.argmax(qsa)]
             self.sample_step(action)
         print(self.G)
 
-    def policy_sample(self, reinforce_model):
-        pass
-
+    def policy_sample(self, policy_model):
+        while self.cur_step <= self.max_step:
+            # 利用policy_net选择action
+            action = policy_model.select_action(self.state)
+            # 根据action去sample data
+            reward = self.sample_step(action)
+            policy_model.policy_net.rewards.append(reward)    # 记录奖励值
+        return self.G
 
 if __name__ == "__main__":
+    from Value_based import DQN
+    from Policy_based import REINFORCE
     # agent1 = Worker_Agent(2459641)
     # if agent1.restart():
     #     agent1.random_sample()
@@ -138,10 +144,12 @@ if __name__ == "__main__":
     agent2.restart()
     agent2.random_sample()
 
-    dqn_model = DQN()
-    dqn_model.load_DQN("./checkpoint/DQN_5.pkl")
-    agent2.restart()
-    agent2.dqn_sample(dqn_model)
+    # dqn_model = DQN(32, 76)
+    # dqn_model.load_DQN("./checkpoint/DQN_5.pkl")
+    # agent2.restart()
+    # agent2.dqn_sample(dqn_model)
+
+
     # agent.sample_step(100)
     # agent.sample_step(101)
     # agent.sample_step(102)

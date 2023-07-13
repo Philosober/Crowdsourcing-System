@@ -49,6 +49,7 @@ class REINFORCE_Net(nn.Module):
 
         self.saved_log_probs = []
         self.rewards = []
+        self.gamma = 0.995
 
     def forward(self, input):
         # input: B x T x input_size

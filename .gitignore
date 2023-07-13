@@ -9,6 +9,8 @@ train/
 
 # ignore some file
 __pycache__
+./final_project_demo.py
+./Policy_Gradient_demo.py
 
 # ignore generate file
 
