@@ -138,7 +138,7 @@ if __name__ == "__main__":
     # else:
     #     print("没有数据，无法采样")
 
-    agent2 = Worker_Agent("./test", 7945)
+    agent2 = Worker_Agent("./data/test", 7945)
     agent2.restart()
     agent2.optimal_sample()
     agent2.restart()

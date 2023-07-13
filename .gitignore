@@ -1,6 +1,6 @@
 # ignore original dataset
-test/
-train/
+data/test/
+data/train/
 
 # ignore "."
 .DS_Store
@@ -9,8 +9,6 @@ train/
 
 # ignore some file
 __pycache__
-./final_project_demo.py
-./Policy_Gradient_demo.py
 
 # ignore generate file
 

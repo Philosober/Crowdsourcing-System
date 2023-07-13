@@ -1,15 +1,7 @@
 import numpy as np
-import torch
-import torch.nn as nn
-from torch import optim
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 import pandas as pd
-from torch.nn.utils.rnn import pad_sequence
-from Network import DQN_Net as Net
 import os
-from torch.optim.lr_scheduler import StepLR
-from tqdm import tqdm
-from torch.utils.data import random_split
 
 class Sample_Data(Dataset):
     def __init__(self, file_path, worker_num=None):

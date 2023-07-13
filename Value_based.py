@@ -24,7 +24,7 @@ SAVE_EPOCH = 1
 
 
 class DQN(Basic_model):
-    def __init__(self, batch_size, task_feature, train_mode=True, file_path='./train/worker_7945.csv'):
+    def __init__(self, batch_size, task_feature, train_mode=True, file_path='./data/train/worker_7945.csv'):
         super(DQN, self).__init__(batch_size, task_feature)
         self.eval_net, self.target_net = Net(TASK_FEATURE * 2), Net(TASK_FEATURE * 2)
 
@@ -232,7 +232,7 @@ def train(model, epoch=EPOCH, every_save=SAVE_EPOCH, save_model_path="./checkpoi
 
 def main():
     # train
-    model = DQN(BATCH_SIZE, TASK_FEATURE, train_mode=True, file_path="./train")
+    model = DQN(BATCH_SIZE, TASK_FEATURE, train_mode=True, file_path="data/train")
     train(model)
     # test
     # model = DQN(train_mode=False)

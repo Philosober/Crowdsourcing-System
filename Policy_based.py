@@ -17,18 +17,16 @@ from matplotlib import pyplot as plt
 
 # hyper parameters
 TASK_FEATURE = 76
-EPSILON = 0.9
-GAMMA = 0.9
-LR = 0.00001
-EPOCH = 20
-TEST_ITERATION = 30
-BATCH_SIZE = 128
-SAVE_EPOCH = 1
+GAMMA = 1
+LR = 0.000001
+EPISODE = 100
+TEST_EPISODE = 10
+# SAVE_EPISODE = 1
 eps = np.finfo(np.float32).eps.item()
 
 
 class REINFORCE(Basic_model):
-    def __init__(self, batch_size, task_feature, train_mode=True, file_path='./train/worker_7945.csv'):
+    def __init__(self, batch_size, task_feature, train_mode=True, file_path='./data/train/worker_7945.csv'):
         super(REINFORCE, self).__init__(batch_size, task_feature)
         self.policy_net = Net(TASK_FEATURE * 2)
 
@@ -93,23 +91,28 @@ def plot(episode_return):
 
 
 def train(episodes):
-    agent = Worker_Agent("./train", 7945)
+    agent = Worker_Agent("./data/train", 7945, gamma=GAMMA)
 
     policy_model = REINFORCE(32, 76)
     episode_return = []
-    for i in range(episodes):
+    max_return = 0
+    for e in range(episodes):
         agent.restart()
         return_value = agent.policy_sample(policy_model)
         policy_model.finish_episode()
         episode_return.append(return_value)
+        if return_value > max_return:
+            torch.save(policy_model.policy_net, "./checkpoint/best_policy.pkl")
+            max_return = return_value
         print(return_value)
+
     plot(episode_return)
 
 
 
 def main():
     # train
-    train(50)
+    train(EPISODE)
     # test
     # test()
 

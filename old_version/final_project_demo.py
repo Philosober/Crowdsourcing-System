@@ -79,7 +79,7 @@ class DQN():
         )
         self.train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
         self.val_dataloader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=True)
-        self.project_info = pd.read_csv("project_info.csv",
+        self.project_info = pd.read_csv("../data/project_info.csv",
                                         usecols=['project_id', 'project_feature'],
                                         index_col='project_id')
 
@@ -93,7 +93,7 @@ class DQN():
                 self.worker_dataloader[worker] = dataloader
             except:
                 continue
-        self.project_info = pd.read_csv("project_info.csv",
+        self.project_info = pd.read_csv("../data/project_info.csv",
                                         usecols=['project_id', 'project_feature'],
                                         index_col='project_id')
 
@@ -337,7 +337,7 @@ def train(model, epoch=EPOCH, every_save=SAVE_EPOCH, save_model_path="./checkpoi
 
 def main():
     # train
-    model = DQN(train_mode=True, file_path='./train')
+    model = DQN(train_mode=True, file_path='../data/train')
     train(model)
     # test
     # model = DQN(train_mode=False)
