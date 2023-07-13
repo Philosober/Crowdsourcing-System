@@ -6,7 +6,7 @@ import torch
 
 
 class Worker_Agent:
-    def __init__(self, folder, worker, gamma=0.9, save_sample=False):
+    def __init__(self, folder, worker, gamma=1, save_sample=False):
         self.real_world = pd.read_csv(folder + '/worker_{}.csv'.format(worker))
         # self.real_world = pd.read_csv('./test.csv')
 
@@ -57,6 +57,8 @@ class Worker_Agent:
             self.EPISODE_MEMORY.append(step_data)
 
         self.cur_step += 1
+
+        return reward
 
     def update_optimal_action(self, done):
         real_completed_task = self.real_world["S'"].iloc[self.cur_step][0]
@@ -118,6 +120,9 @@ class Worker_Agent:
             action = task_pool[torch.argmax(qsa)]
             self.sample_step(action)
         print(self.G)
+
+    def policy_sample(self, reinforce_model):
+        pass
 
 
 if __name__ == "__main__":

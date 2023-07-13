@@ -13,7 +13,7 @@ from torch import optim
 from torch.utils.data import Dataset, DataLoader
 import pandas as pd
 from torch.nn.utils.rnn import pad_sequence
-from Network import Net
+from Network import DQN_Net as Net
 import os
 from torch.optim.lr_scheduler import StepLR
 from tqdm import tqdm
@@ -23,20 +23,22 @@ from torch.utils.data import random_split
 TASK_FEATURE = 76
 EPSILON = 0.9
 GAMMA = 0.9
-LR = 0.001
+LR = 0.00001
 EPOCH = 20
-TEST_ITERATION = 10
-Q_NETWORK_ITERATION = 100
-BATCH_SIZE = 32
-SAVE_ITERATION = 5
+TEST_ITERATION = 30
+BATCH_SIZE = 128
+SAVE_EPOCH = 1
 
 
 class Sample_Data(Dataset):
-    def __init__(self, file_path):
+    def __init__(self, file_path, worker_num=None):
         try:
             self.data = pd.read_csv(file_path)
         except:
-            worker_list = os.listdir(file_path)
+            if not worker_num:
+                worker_list = os.listdir(file_path)
+            else:
+                worker_list = np.random.choice(os.listdir(file_path), size=worker_num)
             worker_data = []
             for worker in worker_list:
                 worker_data.append(pd.read_csv(file_path + '/' + worker))
@@ -60,14 +62,14 @@ class DQN():
         self.target_net.to(device=self.device)
 
         self.optimizer = optim.Adam(self.eval_net.parameters(), LR)
-        self.scheduler = StepLR(self.optimizer, step_size=15, gamma=0.1)
+        self.scheduler = StepLR(self.optimizer, step_size=1, gamma=0.5)
         self.loss = nn.MSELoss()
 
         if train_mode:
             self.load_data(file_path)
 
-    def load_data(self, file_path, train_ratio=0.8):
-        dataset = Sample_Data(file_path)
+    def load_data(self, file_path, train_ratio=0.8, worker_num=None):
+        dataset = Sample_Data(file_path, worker_num)
         train_size = int(train_ratio * len(dataset))
         test_size = len(dataset) - train_size
         train_dataset, val_dataset = random_split(
@@ -307,7 +309,7 @@ class DQN():
         self.target_net.load_state_dict(state_dict)
 
 
-def train(model, epoch=EPOCH, every_save=SAVE_ITERATION, save_model_path="./checkpoint"):
+def train(model, epoch=EPOCH, every_save=SAVE_EPOCH, save_model_path="./checkpoint"):
     for e in range(epoch):
         model.eval_net.train()
         train_bar = tqdm(model.train_dataloader, desc="Training", total=len(model.train_dataloader))
@@ -335,45 +337,11 @@ def train(model, epoch=EPOCH, every_save=SAVE_ITERATION, save_model_path="./chec
 
 def main():
     # train
-    # model = DQN(train_mode=True, file_path='./train/worker_7945.csv')
-    # train(model)
+    model = DQN(train_mode=True, file_path='./train')
+    train(model)
     # test
-    model = DQN(train_mode=False)
-    model.load_DQN("./checkpoint/DQN_5.pkl")
-
-
-# def main():
-#     model = DQN('./train/worker_7945.csv')
-#     # q_eval = torch.randn((10, 10, 1))
-#     # state_Seq = [4, 5, 8, 9, 3, 5, 5, 5, 6, 8]
-#     # print(model.choose_action(q_eval, state_Seq, 3).shape)
-#     # print(model.random_action(state_Seq, 3).shape)
-#
-#     for e in range(EPOCH):
-#         train_bar = tqdm(model.train_dataloader, desc="Training", total=len(model.train_dataloader))
-#         train_bar.set_description(f'Training Epoch [{e}/{EPOCH}]')
-#         model.learn(train_bar)
-#         model.scheduler.step()
-#         # state, action, reward, next_state = next(iter(model.dataloader))
-#         # random_reward, DQN_reward, loss = model.eval(state, action, reward, next_state)
-#         # print("random: {}, QDN: {}, loss: {}".format(random_reward, DQN_reward, loss))
-#
-#         total_random_reward, total_DQN_reward, total_loss = 0, 0, 0
-#         test_bar = tqdm(model.val_dataloader, desc="Testing", total=len(model.val_dataloader))
-#         test_bar.set_description(f'Testing Epoch [{e}/{EPOCH}]')
-#         for batch_data in test_bar:
-#             state, action, reward, next_state = batch_data
-#             random_reward, DQN_reward, loss = model.eval(state, action, reward, next_state)
-#             total_random_reward += random_reward
-#             total_DQN_reward += DQN_reward
-#             total_loss += loss
-#
-#             test_bar.set_postfix(loss=loss.item(), total_random_reward=total_random_reward,
-#                                  total_DQN_reward=total_DQN_reward)
-#
-#         if e % SAVE_ITERATION == 0:
-#             torch.save(model.eval_net.state_dict(), "./checkpoint/DQN_%d.pkl" % e)
-#         # print("random: {}, QDN: {}, loss: {}".format(total_random_reward, total_DQN_reward, total_loss))
+    # model = DQN(train_mode=False)
+    # model.load_DQN("./checkpoint/DQN_5.pkl")
 
 
 if __name__ == '__main__':
