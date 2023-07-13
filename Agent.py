@@ -4,18 +4,24 @@ from ast import literal_eval
 
 
 class Worker_Agent:
-    def __init__(self, worker, gamma=0.9):
+    def __init__(self, worker, gamma=0.9, save_sample=False):
         self.G = 0   # episode返回值
         self.real_world = pd.read_csv('./train/worker_{}.csv'.format(worker))
         # self.real_world = pd.read_csv('./test.csv')
+
         self.real_world['S'] = self.real_world['S'].apply(literal_eval)
         self.real_world["S'"] = self.real_world["S'"].apply(literal_eval)
         self.max_step = len(self.real_world) - 1   # 记录最大回合数
         self.cur_step = 0   # 记录当前是第几个回合
         self.gamma = gamma
+        self.EPISODE_MEMORY = []    # 保存采样结果
+        self.can_sample = True
         # 初始状态
-        self.state = self.real_world['S'].iloc[0]  # [[w_i], [task_pool]]
-        self.optimal_action = self.real_world['A'].iloc[0]   # 当前应该选择的动作
+        try:
+            self.state = self.real_world['S'].iloc[0]  # [[w_i], [task_pool]]
+            self.optimal_action = self.real_world['A'].iloc[0]   # 当前应该选择的动作
+        except:
+            self.can_sample = False
 
     def sample_step(self, action):
         # state = None
@@ -23,7 +29,9 @@ class Worker_Agent:
         # reward = None
         # next_state = None
 
-        print(self.cur_step, self.state, self.optimal_action)
+
+        # print(self.cur_step, self.state, self.optimal_action)
+        step_data = [self.state, action]
 
         if action == self.optimal_action:
             # 更新S
@@ -35,6 +43,9 @@ class Worker_Agent:
             self.optimal_action = self.update_optimal_action(False)
             reward = 0
 
+        step_data.append(reward)
+        step_data.append(self.state)
+
         if not self.optimal_action:
             try:
                 self.optimal_action = self.real_world["A"].iloc[self.cur_step + 1]
@@ -43,7 +54,8 @@ class Worker_Agent:
 
         self.G += np.power(self.gamma, self.cur_step) * reward
 
-        print(self.state, self.optimal_action)
+        # print(self.state, self.optimal_action)
+        # print(step_data)
 
         self.cur_step += 1
 
@@ -98,8 +110,11 @@ class Worker_Agent:
 
 
 if __name__ == "__main__":
-    agent1 = Worker_Agent(7945)
-    agent1.random_sample()
+    agent1 = Worker_Agent(2459641)
+    if agent1.can_sample:
+        agent1.random_sample()
+    else:
+        print("没有数据，无法采样")
     agent2 = Worker_Agent(7945)
     agent2.optimal_sample()
     # agent.sample_step(100)
